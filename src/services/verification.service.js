@@ -39,36 +39,80 @@ const getLambdaClient = () => {
  * @param {string} submission  - The user's submitted text / code
  * @param {number} skillId     - The skill being verified
  * @param {string} skillName   - Human-readable skill name (sent to Lambda)
+ * @param {string} topicTitle  - Topic title for context
+ * @param {string} topicDescription - Topic description for context
  * @returns {Promise<{ status: 'pass'|'fail', feedback: string }>}
  */
-const gradeSubmission = async (submission, skillId, skillName = '') => {
+const gradeSubmission = async (submission, skillId, skillName = '', topicTitle = '', topicDescription = '') => {
     if (USE_LAMBDA) {
-        return await gradeWithLambda(submission, skillId, skillName);
+        return await gradeWithLambda(submission, skillId, skillName, topicTitle, topicDescription);
     }
-    return gradeLocally(submission);
+    return gradeLocally(submission, skillName);
 };
 
 // ─── Local Grader (Development / Fallback) ────────────────────────────────────
-const gradeLocally = (submission) => {
-    // Simple heuristic: submission must be at least 20 chars
-    // Replace this with real logic or proper test cases per skill
-    const passed = submission && submission.trim().length >= 20;
+const gradeLocally = (submission, skillName = '') => {
+    // Enhanced local grading logic
+    const submissionLength = submission.trim().length;
+    const wordCount = submission.trim().split(/\s+/).length;
+    const hasCodePatterns = /```|function|class|def |import |const |let |var |=>/.test(submission);
+    
+    let score = 0;
+    let feedback = [];
+    
+    // Length check (30 points)
+    if (submissionLength >= 50) {
+        score += 30;
+    } else {
+        feedback.push(`Submission too short (${submissionLength} chars). Aim for 50+.`);
+    }
+    
+    // Word count (20 points)
+    if (wordCount >= 20) {
+        score += 20;
+    } else {
+        feedback.push(`Add more detail (${wordCount} words). Aim for 20+.`);
+    }
+    
+    // Code demonstration for programming topics (30 points)
+    if (skillName && (skillName.toLowerCase().includes('python') || 
+        skillName.toLowerCase().includes('programming'))) {
+        if (hasCodePatterns) {
+            score += 30;
+        } else {
+            feedback.push('Include code examples.');
+        }
+    } else {
+        score += 30; // Not a coding topic
+    }
+    
+    // Explanation quality (20 points)
+    if (/because|therefore|example|such as/i.test(submission)) {
+        score += 20;
+    } else {
+        feedback.push('Add more explanation.');
+    }
+    
+    const passed = score >= 70;
+    
     return {
         status: passed ? 'pass' : 'fail',
         feedback: passed
-            ? 'Verification passed! Your submission demonstrates understanding of the skill.'
-            : 'Verification failed. Your submission is too short or incomplete. Please provide a more detailed answer.',
+            ? ` Verification passed! (Score: ${score}/100)\n\nYour submission demonstrates understanding.`
+            : ` Verification failed (Score: ${score}/100)\n\nImprove:\n${feedback.join('\n')}`,
     };
 };
 
 // ─── AWS Lambda Grader (Production) ───────────────────────────────────────────
-const gradeWithLambda = async (submission, skillId, skillName) => {
+const gradeWithLambda = async (submission, skillId, skillName, topicTitle, topicDescription) => {
     const client = getLambdaClient();
 
     const payload = JSON.stringify({
         submission,
         skillId,
         skillName,
+        topicTitle,
+        topicDescription,
     });
 
     const command = new InvokeCommand({
@@ -80,20 +124,24 @@ const gradeWithLambda = async (submission, skillId, skillName) => {
         const response = await client.send(command);
         const resultPayload = JSON.parse(Buffer.from(response.Payload).toString());
 
-        // Lambda is expected to return: { status: 'pass'|'fail', feedback: string }
+        // Lambda is expected to return: { statusCode, body: { status, feedback } }
         if (resultPayload.errorMessage) {
             throw new Error(`Lambda error: ${resultPayload.errorMessage}`);
         }
 
+        const body = typeof resultPayload.body === 'string' 
+            ? JSON.parse(resultPayload.body) 
+            : resultPayload.body;
+
         return {
-            status: resultPayload.status,
-            feedback: resultPayload.feedback,
+            status: body.status,
+            feedback: body.feedback,
         };
     } catch (err) {
         console.error('[VerificationService] Lambda invocation failed:', err.message);
         // Fallback to local grader if Lambda fails
         console.warn('[VerificationService] Falling back to local grader.');
-        return gradeLocally(submission);
+        return gradeLocally(submission, skillName);
     }
 };
 

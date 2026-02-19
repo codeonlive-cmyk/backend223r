@@ -4,14 +4,14 @@ import authenticate from '../middleware/auth.middleware.js';
 
 const router = Router();
 
-// Public routes
+// Protected routes MUST come BEFORE parameterized routes
+router.get('/my-progress', authenticate, roadmapController.getMyProgress);
+router.put('/nodes/:nodeId/progress', authenticate, roadmapController.updateNodeProgress);
+router.post('/:roadmapId/start', authenticate, roadmapController.startRoadmap);
+
+// Public routes (parameterized routes come last)
 router.get('/', roadmapController.getAllRoadmaps);
 router.get('/:id', roadmapController.getRoadmapById);
 router.get('/:roadmapId/nodes/:nodeId/resources', roadmapController.getNodeResources);
-
-// Protected routes (require authentication)
-router.post('/:roadmapId/start', authenticate, roadmapController.startRoadmap);
-router.get('/my-progress', authenticate, roadmapController.getMyProgress);
-router.put('/nodes/:nodeId/progress', authenticate, roadmapController.updateNodeProgress);
 
 export default router;
