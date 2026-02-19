@@ -11,6 +11,9 @@ import authRoutes from './routes/auth.routes.js';
 import skillsRoutes from './routes/skills.routes.js';
 import graphRoutes from './routes/graph.routes.js';
 import verificationRoutes from './routes/verification.routes.js';
+import learningRoutes from './routes/learning.routes.js';
+import cvRoutes from './routes/cv.routes.js';
+import roadmapRoutes from './routes/roadmap.routes.js';
 import errorHandler from './middleware/error.middleware.js';
 
 const app = express();
@@ -41,6 +44,9 @@ app.use('/auth', authRoutes);
 app.use('/skills', skillsRoutes);
 app.use('/graph', graphRoutes);
 app.use('/verify', verificationRoutes);
+app.use('/learning', learningRoutes);
+app.use('/cv', cvRoutes);
+app.use('/roadmaps', roadmapRoutes);
 
 // ─── 404 Handler ──────────────────────────────────────────────────────────────
 app.use((req, res) => {
