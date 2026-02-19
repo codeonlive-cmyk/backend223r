@@ -186,11 +186,40 @@ export const updateNodeProgress = async (req, res, next) => {
     }
 };
 
+/**
+ * GET /roadmaps/:roadmapId/progress
+ * Get user's progress for a specific roadmap
+ */
+export const getRoadmapProgress = async (req, res, next) => {
+    const { roadmapId } = req.params;
+    const userId = req.user.id;
+
+    try {
+        const result = await query(
+            `SELECT 
+                unp.node_id,
+                unp.status,
+                unp.started_at,
+                unp.completed_at
+             FROM user_node_progress unp
+             JOIN roadmap_nodes rn ON rn.id = unp.node_id
+             JOIN roadmap_phases rp ON rp.id = rn.phase_id
+             WHERE rp.roadmap_id = $1 AND unp.user_id = $2`,
+            [roadmapId, userId]
+        );
+
+        res.json({ nodes: result.rows });
+    } catch (err) {
+        next(err);
+    }
+};
+
 export default {
     getAllRoadmaps,
     getRoadmapById,
     getNodeResources,
     startRoadmap,
     getMyProgress,
+    getRoadmapProgress,
     updateNodeProgress
 };

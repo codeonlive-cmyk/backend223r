@@ -8,6 +8,7 @@ const router = Router();
 router.get('/my-progress', authenticate, roadmapController.getMyProgress);
 router.put('/nodes/:nodeId/progress', authenticate, roadmapController.updateNodeProgress);
 router.post('/:roadmapId/start', authenticate, roadmapController.startRoadmap);
+router.get('/:roadmapId/progress', authenticate, roadmapController.getRoadmapProgress);
 
 // Public routes (parameterized routes come last)
 router.get('/', roadmapController.getAllRoadmaps);
