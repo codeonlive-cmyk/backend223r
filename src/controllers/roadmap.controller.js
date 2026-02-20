@@ -130,8 +130,8 @@ export const getMyProgress = async (req, res, next) => {
             `SELECT 
                 r.id, r.name, r.description, r.icon, r.category,
                 urp.started_at, urp.last_accessed,
-                COUNT(DISTINCT rn.id) as total_nodes,
-                COUNT(DISTINCT CASE WHEN unp.status = 'completed' THEN unp.node_id END) as completed_nodes
+                COUNT(DISTINCT rn.id)::integer as total_nodes,
+                COUNT(DISTINCT CASE WHEN unp.status = 'completed' THEN unp.node_id END)::integer as completed_nodes
              FROM user_roadmap_progress urp
              JOIN roadmaps r ON r.id = urp.roadmap_id
              LEFT JOIN roadmap_phases rp ON rp.roadmap_id = r.id
@@ -163,19 +163,38 @@ export const updateNodeProgress = async (req, res, next) => {
     }
 
     try {
-        const result = await query(
-            `INSERT INTO user_node_progress (user_id, node_id, status, started_at, completed_at)
-             VALUES ($1, $2, $3, 
-                CASE WHEN $3 IN ('in_progress', 'completed', 'verified') THEN CURRENT_TIMESTAMP ELSE NULL END,
-                CASE WHEN $3 IN ('completed', 'verified') THEN CURRENT_TIMESTAMP ELSE NULL END)
-             ON CONFLICT (user_id, node_id) 
-             DO UPDATE SET 
-                status = EXCLUDED.status,
-                started_at = COALESCE(user_node_progress.started_at, EXCLUDED.started_at),
-                completed_at = EXCLUDED.completed_at
-             RETURNING *`,
-            [userId, nodeId, status]
+        // Determine timestamps based on status
+        const now = new Date();
+        const startedAt = ['in_progress', 'completed', 'verified'].includes(status) ? now : null;
+        const completedAt = ['completed', 'verified'].includes(status) ? now : null;
+
+        // First check if record exists
+        const existing = await query(
+            `SELECT * FROM user_node_progress WHERE user_id = $1 AND node_id = $2`,
+            [userId, nodeId]
         );
+
+        let result;
+        if (existing.rows.length > 0) {
+            // Update existing record
+            result = await query(
+                `UPDATE user_node_progress 
+                 SET status = $1,
+                     started_at = COALESCE(started_at, $2),
+                     completed_at = $3
+                 WHERE user_id = $4 AND node_id = $5
+                 RETURNING *`,
+                [status, startedAt, completedAt, userId, nodeId]
+            );
+        } else {
+            // Insert new record
+            result = await query(
+                `INSERT INTO user_node_progress (user_id, node_id, status, started_at, completed_at)
+                 VALUES ($1, $2, $3, $4, $5)
+                 RETURNING *`,
+                [userId, nodeId, status, startedAt, completedAt]
+            );
+        }
 
         res.json({ 
             message: 'Progress updated successfully',
